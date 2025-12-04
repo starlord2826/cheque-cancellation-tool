@@ -90,6 +90,41 @@ signatureInput.addEventListener('change', (e) => {
     handleElementUpload(e.target.files[0], 'signature');
 });
 
+function removeBackground(img, threshold = 200) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    
+    ctx.drawImage(img, 0, 0);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+        
+        const isWhite = brightness > threshold && 
+                       r > threshold && 
+                       g > threshold && 
+                       b > threshold;
+        
+        if (isWhite) {
+            data[i + 3] = 0;
+        }
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+    const processedImg = new Image();
+    processedImg.src = canvas.toDataURL('image/png');
+    return processedImg;
+}
+
 function handleElementUpload(file, type) {
     if (!file) return;
 
@@ -98,53 +133,64 @@ function handleElementUpload(file, type) {
         const img = new Image();
         img.src = e.target.result;
         img.onload = () => {
-            const maxWidth = baseImage.width * 0.4;
-            const maxHeight = baseImage.height * 0.3;
-            
-            let width = img.width;
-            let height = img.height;
-            
-            if (width > maxWidth) {
-                const scale = maxWidth / width;
-                width = maxWidth;
-                height = height * scale;
-            }
-            if (height > maxHeight) {
-                const scale = maxHeight / height;
-                height = maxHeight;
-                width = width * scale;
-            }
-            
-            const x = (baseImage.width - width) / 2;
-            const y = type === 'signature' 
-                ? baseImage.height - height - 50
-                : (baseImage.height - height) / 2;
-            
-            const element = {
-                id: Date.now() + Math.random(),
-                type: type,
-                image: img,
-                x: x,
-                y: y,
-                width: width,
-                height: height,
-                displayWidth: width * canvasScale,
-                displayHeight: height * canvasScale
-            };
-            
-            customElements.push(element);
-            addElementToOverlay(element);
-            addElementToPreview(element);
-            renderCanvas();
-            
             if (type === 'cancelled-text') {
-                cancelledTextInput.value = '';
+                const processedImg = removeBackground(img, 200);
+                processedImg.onload = () => {
+                    addElementToCanvas(processedImg, type);
+                };
             } else {
-                signatureInput.value = '';
+                addElementToCanvas(img, type);
             }
         };
     };
     reader.readAsDataURL(file);
+}
+
+function addElementToCanvas(img, type) {
+    const maxWidth = baseImage.width * 0.4;
+    const maxHeight = baseImage.height * 0.3;
+    
+    let width = img.width;
+    let height = img.height;
+    
+    if (width > maxWidth) {
+        const scale = maxWidth / width;
+        width = maxWidth;
+        height = height * scale;
+    }
+    if (height > maxHeight) {
+        const scale = maxHeight / height;
+        height = maxHeight;
+        width = width * scale;
+    }
+    
+    const x = (baseImage.width - width) / 2;
+    const y = type === 'signature' 
+        ? baseImage.height - height - 50
+        : (baseImage.height - height) / 2;
+    
+    const element = {
+        id: Date.now() + Math.random(),
+        type: type,
+        image: img,
+        x: x,
+        y: y,
+        width: width,
+        height: height,
+        displayWidth: width * canvasScale,
+        displayHeight: height * canvasScale
+    };
+    
+    customElements.push(element);
+    addElementToOverlay(element);
+    addElementToPreview(element);
+    renderCanvas();
+    
+    if (type === 'cancelled-text') {
+        cancelledTextInput.value = '';
+    } else {
+        signatureInput.value = '';
+    }
 }
 
 function addElementToOverlay(element) {
